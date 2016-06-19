@@ -7,8 +7,8 @@
 using namespace std;
 
 struct data{
-  float input, o, p, i, d;
-};
+  double input, o;
+} d;
 
 struct tunings{
   float kp,ki,kd;
@@ -29,9 +29,8 @@ void setup() {
 }
 
 void loop() {
-  data d = ch.next();
-  cout  << d.input << '\t' << d.o << ":\t" << d.p/d.o*100 << "%P\t"
-        << d.i/d.o*100 << "%I\t" << d.d/d.o*100 << "%D\n";
+  d = ch.next();
+  cout  << d.input << '\t' << d.o << "\n";
 
 }
 
