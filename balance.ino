@@ -2,61 +2,91 @@
 #include "Channel.h"
 #include "PID.h"
 #include "Motor.h"
-
 #include "MPU9250.h"
+#include <Servo.h>
+
 
 MPU9250 accelgyro;
 Motor servo(2,3);
+Servo arm;
 
-struct PIDData{
-    double input, output;
-} pd;
-double target;
-Channel<PIDData> ch;
+double input, output, target;
+double i2, o2, t2;
 
-PID contr(&pd.input, &pd.output, &target,0,0,0,DIRECT);
+struct tunings { 
+  float kp, ki, kd; 
+};
+
+Channel<tunings> tu;
+Channel<tunings> fu;
+Channel<float> ack;
 
 
-double input() {
+PID contr(&input, &output, &target,0.000005,0,0,DIRECT);
+PID s2s(&i2, &o2, &t2,0.0005,0,0,DIRECT);
+
+double rotation() {
   static long lastTime=0;
-  long time=millis();
+  long time=micros();
   double rot=0;
   if(0!=lastTime) 
     rot= (time-lastTime)*(double)accelgyro.getRotationY()/(1024.0);
   lastTime=time;
   return rot;
 }
+double tilt() {
+  static long lastTime=0;
+  long time=micros();
+  double rot=0;
+  if(0!=lastTime) 
+    rot= (time-lastTime)*(double)accelgyro.getRotationX()/(1024.0);
+  lastTime=time;
+  return rot;
+}
 
+void tune(tunings& t){
+  contr.SetTunings(t.kp, t.ki, t.kd);
+  target = input;
+  ack.send(t.kp);
+}
+void tune2(tunings& t){
+  s2s.SetTunings(t.kp, t.ki, t.kd);
+  t2 = i2;
+  ack.send(t.kp);
+}
 
 void setup(){  
   
-  struct tunings { float kp, ki, kd; };
-  Channel<tunings> tu;
-  tu.init(Serial, 115200, 'T');
-  tunings t = tu.next();
-  contr.SetTunings(t.kp, t.ki, t.kd);
-
-  contr.SetSampleTime(50);
+  tu.init(Serial, 115200, 'T', tune);
+  fu.init(Serial, 115200, '2', tune2);
+  ack.init(Serial, 115200, 'A');
   contr.SetOutputLimits(-1,1);
-  
-  ch.init(Serial, 115200, 'P');
-
+  contr.SetSampleTime(20);
+  s2s.SetSampleTime(20);
+  s2s.SetOutputLimits(60,180);
+  arm.attach(5);
   Wire.begin();
   accelgyro.initialize();
-  
-  delay(2000);
+  delay(1000);
 
-  target = input();
+  target = rotation();
+  t2=tilt();
   
   contr.SetMode(AUTOMATIC);
+  s2s.SetMode(AUTOMATIC);
 
 }
 
 void loop()
 {
-  pd.input+=input();
+  input+=rotation();
+  i2-=tilt();
   if(contr.Compute()){
-    servo.turn(pd.output);
-    ch.send(pd);
+    servo.turn(output);
   }
+  if(s2s.Compute()){
+    arm.write(o2);
+  }
+  tu.check();
+  fu.check();
 }

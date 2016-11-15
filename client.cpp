@@ -3,35 +3,54 @@
 #else
 #include "../libraries/arduino-easy-serial/Channel.h"
 #include <iostream>
+#include <fstream>
 
 using namespace std;
 
-struct data{
-  double input, o;
-} d;
-
 struct tunings{
   float kp,ki,kd;
-} t;
+} t,t2;
 
 HardwareSerial Serial("/dev/cu.usbmodem14111");
 
-Channel<data> ch;
 Channel<tunings> tu;
+Channel<tunings> fu;
+Channel<float> ack;
+
+
 
 void setup() {
-  ch.init(Serial, 115200, 'P');
   tu.init(Serial, 115200, 'T');
-  cout << "KP?\t"; cin >> t.kp;
-  cout << "KI?\t"; cin >> t.ki;
-  cout << "KD?\t"; cin >> t.kd;
-  tu.send(t);
+  fu.init(Serial, 115200, '2');
+  ack.init(Serial, 115200, 'A');
+  
 }
 
 void loop() {
-  d = ch.next();
-  cout  << d.input << '\t' << d.o << "\n";
-
+  float* k;
+  switch (cin.get()){
+    case 'p': k=&t.kp; cout << "kp = "; break;
+    case 'i': k=&t.ki; cout << "ki = "; break;
+    case 'd': k=&t.kd; cout << "kd = "; break;
+    case 'P': k=&t2.kp; cout << "kp2 = "; break;
+    case 'I': k=&t2.ki; cout << "ki2 = "; break;
+    case 'D': k=&t2.kd; cout << "kd2 = "; break;
+    default: return;
+  }
+  char op=cin.get();
+  float mult;
+  cin >> mult;
+  if(op=='*')
+    (*k)*=mult;
+  else if(op=='/')
+    (*k)/=mult;
+  else if(op=='=')
+    (*k)=mult;
+  cout << (*k) << endl;
+  fu.send(t2);
+  tu.send(t);
+ 
+  cout << "I got " << ack.next() << endl;
 }
 
 int main(){
